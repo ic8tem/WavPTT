@@ -264,7 +264,7 @@ func buildMain() fyne.CanvasObject {
 		grid.Add(memBtns[i])
 	}
 	row1 := container.NewBorder(nil, nil, nil,
-		fixed(126, 42, newRBtn("File WAV...", openMemWin)), grid)
+		fixed(146, 42, newRBtn("File WAV...", openMemWin)), grid)
 
 	selMixer = widget.NewSelect(nil, func(s string) {
 		if s != "" && s != snapshot().TxMixer {
