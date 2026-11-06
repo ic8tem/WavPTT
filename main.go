@@ -229,7 +229,10 @@ func refreshLists() {
 // scelta resta valida e viene ritrovata quando ricompare.
 func showChoice(s *widget.Select, saved string) {
 	if saved == "" {
-		s.PlaceHolder = "(scegli)"
+		if s.PlaceHolder != "(scegli)" {
+			s.PlaceHolder = "(scegli)"
+			s.Refresh()
+		}
 		return
 	}
 	for _, o := range s.Options {
@@ -259,13 +262,14 @@ func fixed(w, h float32, o fyne.CanvasObject) fyne.CanvasObject {
 func buildMain() fyne.CanvasObject {
 	c := snapshot()
 
-	row1 := container.NewGridWithColumns(9)
+	grid := container.NewGridWithColumns(8)
 	for i := 0; i < 8; i++ {
 		i := i
 		memBtns[i] = widget.NewButton(fmt.Sprintf("F%d", i+1), func() { fire(i) })
-		row1.Add(memBtns[i])
+		grid.Add(memBtns[i])
 	}
-	row1.Add(widget.NewButton("File WAV...", openMemWin))
+	row1 := container.NewBorder(nil, nil, nil,
+		fixed(120, 38, widget.NewButton("File WAV...", openMemWin)), grid)
 
 	selMixer = widget.NewSelect(nil, func(s string) {
 		if s != "" && s != snapshot().TxMixer {
@@ -273,12 +277,14 @@ func buildMain() fyne.CanvasObject {
 		}
 		unfocus()
 	})
+	selMixer.PlaceHolder = "(scegli)"
 	selCom = widget.NewSelect(nil, func(s string) {
 		if s != "" && s != snapshot().Port {
 			update(func(c *core.Config) { c.Port = s })
 		}
 		unfocus()
 	})
+	selCom.PlaceHolder = "(scegli)"
 	radio = widget.NewRadioGroup([]string{"RTS", "DTR"}, func(s string) {
 		if s == "" {
 			return
