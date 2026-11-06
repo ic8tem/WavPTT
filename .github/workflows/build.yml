@@ -43,9 +43,9 @@ jobs:
       - name: Pacchetto
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force WavPTT | Out-Null
-          Copy-Item WavPTT.exe, packaging/LEGGIMI.txt WavPTT/
-          Compress-Archive -Path WavPTT -DestinationPath WavPTT-windows.zip
+          New-Item -ItemType Directory -Force pkg/WavPTT | Out-Null
+          Copy-Item WavPTT.exe, packaging/LEGGIMI.txt pkg/WavPTT/
+          Compress-Archive -Path pkg/WavPTT -DestinationPath WavPTT-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: WavPTT-windows
@@ -76,17 +76,18 @@ jobs:
             sleep 10
             import -window root schermata-linux.png
             kill $PID || true'
-          ls -la prova
           test -f schermata-linux.png
+          convert schermata-linux.png -trim +repage schermata-linux.png
+          echo "SCHERMATA-INIZIO"; base64 -w0 schermata-linux.png; echo; echo "SCHERMATA-FINE"
       - uses: actions/upload-artifact@v4
         with:
           name: schermata-linux
           path: schermata-linux.png
       - name: Pacchetto
         run: |
-          mkdir -p WavPTT
-          cp WavPTT Icon.png packaging/LEGGIMI.txt packaging/wavptt.desktop WavPTT/
-          tar czf WavPTT-linux-x86_64.tar.gz WavPTT
+          mkdir -p pkg/WavPTT
+          cp WavPTT Icon.png packaging/LEGGIMI.txt packaging/wavptt.desktop pkg/WavPTT/
+          tar czf WavPTT-linux-x86_64.tar.gz -C pkg WavPTT
       - uses: actions/upload-artifact@v4
         with:
           name: WavPTT-linux
@@ -96,6 +97,7 @@ jobs:
     name: Mac
     needs: test
     runs-on: macos-latest
+    timeout-minutes: 60
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
     steps:
@@ -115,7 +117,7 @@ jobs:
           lipo -info WavPTT
       - name: Pacchetto WavPTT.app
         run: |
-          APP=WavPTT/WavPTT.app
+          APP=pkg/WavPTT/WavPTT.app
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp WavPTT "$APP/Contents/MacOS/WavPTT"
           cp packaging/Info.plist "$APP/Contents/Info.plist"
@@ -126,8 +128,8 @@ jobs:
           done
           iconutil -c icns icon.iconset -o "$APP/Contents/Resources/icon.icns"
           codesign --force --deep -s - "$APP"
-          cp packaging/LEGGIMI.txt WavPTT/
-          ditto -c -k --keepParent WavPTT WavPTT-mac.zip
+          cp packaging/LEGGIMI.txt pkg/WavPTT/
+          ditto -c -k --keepParent pkg/WavPTT WavPTT-mac.zip
       - uses: actions/upload-artifact@v4
         with:
           name: WavPTT-mac
