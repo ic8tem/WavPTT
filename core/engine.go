@@ -16,11 +16,21 @@ const (
 
 // Backend: hardware (porta COM e scheda audio). Separato per poterlo provare.
 type Backend interface {
-	// PTTOn apre la porta, alza RTS o DTR (l'altra linea resta bassa) e
-	// restituisce la funzione che abbassa la linea e chiude la porta.
-	PTTOn(port string, useDTR bool) (release func(), err error)
-	// Play riproduce e ritorna quando l'audio è uscito dalla scheda o stop() è vero.
+	// PTTOn attiva il PTT secondo le impostazioni: porta seriale (alza RTS o
+	// DTR, l'altra linea resta bassa) oppure TCI. Restituisce la funzione che
+	// rilascia il PTT e il riproduttore da usare per l'audio di questa trasmissione.
+	PTTOn(c Config) (tx Transmission, err error)
+	// Play riproduce sulla scheda audio indicata ("" = predefinita), senza PTT
+	// (ascolto di prova).
 	Play(pcm *PCM, device string, stop func() bool) error
+}
+
+// Transmission: una trasmissione in corso (PTT attivo).
+type Transmission interface {
+	// Play riproduce e ritorna quando l'audio è uscito o stop() è vero.
+	Play(pcm *PCM, stop func() bool) error
+	// Release rilascia il PTT.
+	Release()
 }
 
 // Engine: coda delle memorie e sequenza PTT -> ritardo -> audio -> rilascio.
@@ -97,7 +107,7 @@ func (e *Engine) Run() {
 			e.Status(StatusError, fmt.Sprintf("F%d: %v", idx+1, err))
 			continue
 		}
-		release, err := e.B.PTTOn(c.Port, c.UseDTR)
+		tx, err := e.B.PTTOn(c)
 		if err != nil {
 			e.drain()
 			e.busy.Store(false)
@@ -105,10 +115,14 @@ func (e *Engine) Run() {
 			continue
 		}
 		line := "RTS"
-		if c.UseDTR {
+		where := c.Port
+		switch {
+		case c.UseTCI:
+			line, where = "TCI", c.TCIAddr
+		case c.UseDTR:
 			line = "DTR"
 		}
-		e.Status(StatusTX, fmt.Sprintf("PTT %s %s attivo - attesa %d ms", c.Port, line, c.DelayMs))
+		e.Status(StatusTX, fmt.Sprintf("PTT %s %s attivo - attesa %d ms", where, line, c.DelayMs))
 		deadline := time.Now().Add(time.Duration(ClampDelay(c.DelayMs)) * time.Millisecond)
 		for time.Now().Before(deadline) && !e.stop.Load() {
 			time.Sleep(time.Millisecond)
@@ -123,8 +137,8 @@ func (e *Engine) Run() {
 			}
 			e.Playing(cur)
 			e.Status(StatusTX, fmt.Sprintf("TX  F%d  %s   (%s %s)   in coda: %d", cur+1,
-				filepath.Base(e.Store.Abs(c.Memories[cur])), c.Port, line, len(e.queue)))
-			if err := e.B.Play(pcm, c.TxMixer, e.stop.Load); err != nil {
+				filepath.Base(e.Store.Abs(c.Memories[cur])), where, line, len(e.queue)))
+			if err := tx.Play(pcm, e.stop.Load); err != nil {
 				lastErr = fmt.Sprintf("F%d: %v", cur+1, err)
 			}
 			// memoria successiva in coda: pausa di 50 ms, PTT sempre attivo
@@ -151,11 +165,11 @@ func (e *Engine) Run() {
 					lastErr = fmt.Sprintf("F%d: %v", next+1, err)
 					continue
 				}
-				c.Memories, c.TxMixer = c2.Memories, c2.TxMixer
+				c.Memories = c2.Memories
 				pcm, cur = p2, next
 			}
 		}
-		release()
+		tx.Release()
 		e.Playing(-1)
 		stopped := e.stop.Load()
 		if stopped {

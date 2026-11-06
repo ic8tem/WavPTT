@@ -1,4 +1,4 @@
-WavPTT v11 - messaggi WAV con PTT su porta seriale
+WavPTT v12 - messaggi WAV con PTT su porta seriale
 ==================================================
 
 Il programma salva tutto nella propria cartella: WavPTT.ini e la
@@ -29,3 +29,7 @@ LINUX (x86_64)
 - Per la finestra di scelta file del sistema installa "zenity"
   (altrimenti WavPTT usa la propria).
 - I tasti globali Ctrl+Alt+F1...F8 funzionano nelle sessioni X11.
+TCI (SunSDR / ExpertSDR)
+- Scegli TCI accanto a RTS/DTR e scrivi l'indirizzo della radio
+  (ExpertSDR: 127.0.0.1:40001). PTT e audio passano dalla rete,
+  senza porta seriale ne' scheda audio. Dettagli nel bottone Help.

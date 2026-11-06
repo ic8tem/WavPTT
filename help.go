@@ -5,7 +5,8 @@ per Windows, Mac e Linux
 
 COME FUNZIONA
 Quando premi una memoria (bottoni F1...F8 o tasti F1...F8), il programma:
-  1. apre la porta scelta nel menu PTT;
+  1. apre la porta scelta nel menu PTT (oppure si collega alla radio
+     tramite TCI, vedi sotto);
   2. porta allo stato alto (attivo) la linea scelta, RTS oppure DTR;
      l'altra linea resta bassa;
   3. attende il Ritardo (ms) impostato (da 0 a 300 ms);
@@ -80,13 +81,37 @@ IMPOSTAZIONI
   Compressore   compressione sull'audio emesso: off oppure 3...13 dB
   PTT           porta seriale che comanda il PTT
                 (Windows: COM1...; Mac: /dev/cu.*; Linux: /dev/ttyUSB0...)
-  RTS / DTR     linea della porta usata per il PTT
+  RTS/DTR/TCI   linea della porta usata per il PTT, oppure TCI
   Ritardo (ms)  attesa tra PTT attivo e inizio dell'audio (0-300)
 
 I menu TX MIXER e PTT si aggiornano ogni volta che li apri, quindi
 un'interfaccia USB collegata dopo l'avvio compare nell'elenco.
 Linux: per usare la porta seriale l'utente deve far parte del gruppo
 "dialout" (sudo usermod -aG dialout $USER, poi rientrare).
+
+PTT E AUDIO TRAMITE TCI (SunSDR / ExpertSDR e programmi compatibili)
+Scegli TCI accanto a RTS e DTR: al posto della porta seriale compare
+l'indirizzo del server TCI, nella forma host:porta.
+  ExpertSDR (SunSDR)         127.0.0.1:40001  (valore iniziale)
+  AetherSDR, Thetis e altri  di solito porta 50001
+Se la radio e' su un altro computer, scrivi il suo indirizzo di rete
+(per esempio 192.168.1.20:40001).
+Con TCI il programma:
+  1. si collega alla radio e attiva la trasmissione con "trx" e
+     sorgente audio TCI;
+  2. attende il Ritardo (ms) mandando silenzio;
+  3. manda il file WAV alla radio attraverso il TCI, lavorato come
+     sempre (8000 Hz, compressore, filtro, volume);
+  4. a fine audio rilascia la trasmissione e chiude il collegamento.
+Con TCI la scheda audio TX MIXER non serve e resta disattivata.
+In ExpertSDR il TCI deve essere abilitato (Opzioni > TCI) e deve
+poter comandare la trasmissione. Se la radio non risponde, il motivo
+compare nella riga di stato e la trasmissione non parte.
+
+COLORI
+Il menu Colori, accanto al bottone Help, sceglie lo schema: Chiaro,
+Notte, Nero, Blu, Viola, Verde. La scelta si applica subito ed e'
+salvata in WavPTT.ini.
 
 DOVE SONO I DATI
 Tutto resta nella cartella del programma (su Mac: nella cartella che

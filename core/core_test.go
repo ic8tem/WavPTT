@@ -147,7 +147,7 @@ func TestConfigAndImport(t *testing.T) {
 	if out[0] != "WAV/cq.wav" || out[2] != "WAV/cq_2.wav" {
 		t.Fatalf("%v", out)
 	}
-	c := Config{TxMixer: "USB Audio CODEC", Port: "COM7", UseDTR: true, DelayMs: 120, Volume: 37, FilterMode: 3, CompDB: 9, Memories: out}
+	c := Config{TxMixer: "USB Audio CODEC", Port: "COM7", UseDTR: true, DelayMs: 120, Volume: 37, FilterMode: 3, CompDB: 9, Memories: out, TCIAddr: "192.168.1.20:50001", Theme: "Viola"}
 	if err := st.Save(c); err != nil {
 		t.Fatal(err)
 	}
@@ -187,16 +187,28 @@ func (f *fakeBackend) log(s string) {
 	f.events = append(f.events, ev{time.Since(f.t0), s})
 	f.mu.Unlock()
 }
-func (f *fakeBackend) PTTOn(port string, dtr bool) (func(), error) {
+
+type fakeTX struct {
+	f   *fakeBackend
+	dev string
+}
+
+func (t fakeTX) Release()                            { t.f.log("OFF") }
+func (t fakeTX) Play(p *PCM, stop func() bool) error { return t.f.Play(p, t.dev, stop) }
+
+func (f *fakeBackend) PTTOn(c Config) (Transmission, error) {
 	if f.failPTT {
 		return nil, os.ErrNotExist
 	}
-	l := "RTS"
-	if dtr {
+	l, port := "RTS", c.Port
+	if c.UseDTR {
 		l = "DTR"
 	}
+	if c.UseTCI {
+		l, port = "TCI", c.TCIAddr
+	}
 	f.log("ON " + port + " " + l)
-	return func() { f.log("OFF") }, nil
+	return fakeTX{f, c.TxMixer}, nil
 }
 func (f *fakeBackend) Play(p *PCM, dev string, stop func() bool) error {
 	f.log("PLAY " + string(p.Data) + " " + dev)
@@ -267,6 +279,21 @@ func TestEngineQueue(t *testing.T) {
 	}
 	if e.Busy() {
 		t.Fatal("ancora occupato")
+	}
+
+	// PTT tramite TCI
+	fb.mu.Lock()
+	fb.events = nil
+	fb.mu.Unlock()
+	cfg.UseTCI, cfg.TCIAddr = true, "127.0.0.1:40001"
+	e.Enqueue(0)
+	time.Sleep(250 * time.Millisecond)
+	seq = nil
+	for _, x := range fb.events {
+		seq = append(seq, x.what)
+	}
+	if strings.Join(seq, "|") != "ON 127.0.0.1:40001 TCI|PLAY F1 Mixer|END|OFF" {
+		t.Fatalf("tci: %v", seq)
 	}
 
 	// porta COM non apribile: niente audio

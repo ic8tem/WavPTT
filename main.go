@@ -29,7 +29,7 @@ import (
 	"wavptt/core"
 )
 
-const appTitle = "WavPTT v11 - messaggi WAV con PTT"
+const appTitle = "WavPTT v12 - messaggi WAV con PTT"
 
 //go:embed Icon.png
 var iconPNG []byte
@@ -47,7 +47,9 @@ var (
 	hwb *hw
 	eng *core.Engine
 
-	memBtns  [8]*widget.Button
+	memBtns  [8]*rbtn
+	tciEd    *widget.Entry
+	selTheme *widget.Select
 	selMixer *widget.Select
 	selCom   *widget.Select
 	radio    *widget.RadioGroup
@@ -101,14 +103,7 @@ func setStatus(kind int, msg string) {
 
 func setPlaying(idx int) {
 	for i, b := range memBtns {
-		want := widget.MediumImportance
-		if i == idx {
-			want = widget.DangerImportance
-		}
-		if b.Importance != want {
-			b.Importance = want
-			b.Refresh()
-		}
+		b.SetTX(i == idx)
 	}
 }
 
@@ -265,11 +260,11 @@ func buildMain() fyne.CanvasObject {
 	grid := container.NewGridWithColumns(8)
 	for i := 0; i < 8; i++ {
 		i := i
-		memBtns[i] = widget.NewButton(fmt.Sprintf("F%d", i+1), func() { fire(i) })
+		memBtns[i] = newRBtn(fmt.Sprintf("F%d", i+1), func() { fire(i) })
 		grid.Add(memBtns[i])
 	}
 	row1 := container.NewBorder(nil, nil, nil,
-		fixed(120, 38, widget.NewButton("File WAV...", openMemWin)), grid)
+		fixed(126, 42, newRBtn("File WAV...", openMemWin)), grid)
 
 	selMixer = widget.NewSelect(nil, func(s string) {
 		if s != "" && s != snapshot().TxMixer {
@@ -285,21 +280,34 @@ func buildMain() fyne.CanvasObject {
 		unfocus()
 	})
 	selCom.PlaceHolder = "(scegli)"
-	radio = widget.NewRadioGroup([]string{"RTS", "DTR"}, func(s string) {
+	// PTT tramite TCI: indirizzo del server al posto della porta seriale
+	tciEd = widget.NewEntry()
+	tciEd.SetText(c.TCIAddr)
+	tciEd.SetPlaceHolder(core.DefaultTCIAddr)
+	tciEd.OnChanged = func(s string) {
+		update(func(c *core.Config) { c.TCIAddr = strings.TrimSpace(s) })
+	}
+	tciEd.OnSubmitted = func(string) { unfocus() }
+	radio = widget.NewRadioGroup([]string{"RTS", "DTR", "TCI"}, func(s string) {
 		if s == "" {
 			return
 		}
-		dtr := s == "DTR"
-		if dtr != snapshot().UseDTR {
-			update(func(c *core.Config) { c.UseDTR = dtr })
+		dtr, tci := s == "DTR", s == "TCI"
+		cur := snapshot()
+		if dtr != cur.UseDTR || tci != cur.UseTCI {
+			update(func(c *core.Config) { c.UseDTR, c.UseTCI = dtr, tci })
 		}
+		showPTTMode(tci)
 		unfocus()
 	})
 	radio.Horizontal = true
 	radio.Required = true
-	if c.UseDTR {
+	switch {
+	case c.UseTCI:
+		radio.SetSelected("TCI")
+	case c.UseDTR:
 		radio.SetSelected("DTR")
-	} else {
+	default:
 		radio.SetSelected("RTS")
 	}
 	delayEd = newDelayEntry()
@@ -320,8 +328,8 @@ func buildMain() fyne.CanvasObject {
 		}
 	}
 	row2 := container.NewHBox(
-		widget.NewLabel("TX MIXER"), fixed(260, 38, selMixer),
-		widget.NewLabel("PTT"), fixed(170, 38, selCom),
+		widget.NewLabel("TX MIXER"), fixed(230, 38, selMixer),
+		widget.NewLabel("PTT"), fixed(160, 38, container.NewStack(selCom, tciEd)),
 		radio,
 		widget.NewLabel("Ritardo (ms)"), fixed(70, 38, delayEd),
 	)
@@ -370,9 +378,43 @@ func buildMain() fyne.CanvasObject {
 
 	statusLb = widget.NewLabel("")
 	statusLb.Truncation = fyne.TextTruncateEllipsis
-	row5 := container.NewBorder(nil, nil, nil, widget.NewButton("Help", openHelp), statusLb)
+	selTheme = widget.NewSelect(ThemeNames, func(s string) {
+		if s != "" && s != snapshot().Theme {
+			update(func(c *core.Config) { c.Theme = s })
+			applyTheme(s)
+		}
+		unfocus()
+	})
+	selTheme.SetSelected(themeName(c.Theme))
+	right := container.NewHBox(widget.NewLabel("Colori"), fixed(120, 38, selTheme), fixed(80, 38, newRBtn("Help", openHelp)))
+	row5 := container.NewBorder(nil, nil, nil, right, statusLb)
 
+	showPTTMode(c.UseTCI)
 	return container.NewPadded(container.NewVBox(row1, row2, row3, warnLb, row5))
+}
+
+// themeName: schema salvato, oppure Notte se sconosciuto.
+func themeName(s string) string {
+	for _, n := range ThemeNames {
+		if n == s {
+			return n
+		}
+	}
+	return "Notte"
+}
+
+// showPTTMode: con TCI si inserisce l'indirizzo del server al posto della
+// porta seriale, e TX MIXER non serve (l'audio va alla radio tramite TCI).
+func showPTTMode(tci bool) {
+	if tci {
+		selCom.Hide()
+		tciEd.Show()
+		selMixer.Disable()
+	} else {
+		tciEd.Hide()
+		selCom.Show()
+		selMixer.Enable()
+	}
 }
 
 func showHotkeyWarning(text string) {
@@ -434,7 +476,7 @@ func openMemWin() {
 			lastDir = filepath.Dir(p)
 			names[i].SetText(filepath.Base(p))
 		}
-		browse := widget.NewButton("...", func() {
+		browse := newRBtn("...", func() {
 			start := lastDir
 			if start == "" && tmp[i] != "" {
 				start = filepath.Dir(tmp[i])
@@ -446,8 +488,8 @@ func openMemWin() {
 			}
 			go chooseWav(w, i, start, setFile)
 		})
-		play := widget.NewButton("Play", func() { startPreview(i, tmp[i], hint) })
-		stop := widget.NewButton("Stop", func() { previewGen.Add(1) })
+		play := newRBtn("Play", func() { startPreview(i, tmp[i], hint) })
+		stop := newRBtn("Stop", func() { previewGen.Add(1) })
 		rows.Add(container.NewBorder(nil, nil,
 			container.NewGridWrap(fyne.NewSize(30, 36), container.NewCenter(lbl)),
 			container.NewHBox(browse, play, stop), names[i]))
@@ -457,7 +499,7 @@ func openMemWin() {
 		memWin = nil
 		w.Close()
 	}
-	save := widget.NewButton("Salva", func() {
+	save := newRBtn("Salva", func() {
 		stored, err := store.Import(tmp)
 		if err != nil {
 			dialog.ShowError(err, w)
@@ -467,8 +509,9 @@ func openMemWin() {
 		closeWin()
 		setStatus(core.StatusNormal, "Memorie salvate (file copiati nella cartella WAV)")
 	})
-	save.Importance = widget.HighImportance
-	cancel := widget.NewButton("Annulla", closeWin)
+	save.minW = 90
+	cancel := newRBtn("Annulla", closeWin)
+	cancel.minW = 90
 	bottom := container.NewBorder(nil, nil, nil, container.NewHBox(save, cancel), hint)
 	w.SetContent(container.NewPadded(container.NewBorder(nil, bottom, nil, nil, rows)))
 	w.SetCloseIntercept(closeWin)
@@ -561,8 +604,8 @@ func openHelp() {
 		helpWin = nil
 		w.Close()
 	}
-	btn := widget.NewButton("Chiudi", closeWin)
-	btn.Importance = widget.HighImportance
+	btn := newRBtn("Chiudi", closeWin)
+	btn.minW = 100
 	w.SetContent(container.NewBorder(nil,
 		container.NewPadded(container.NewHBox(layout.NewSpacer(), btn)), nil, nil,
 		container.NewVScroll(txt)))
@@ -574,12 +617,6 @@ func openHelp() {
 
 // ---------------------------------------------------------------- main
 
-// noHW: usato se il sistema audio non si apre; ogni trasmissione dà errore.
-type noHW struct{ err error }
-
-func (n noHW) PTTOn(string, bool) (func(), error)        { return nil, n.err }
-func (n noHW) Play(*core.PCM, string, func() bool) error { return n.err }
-
 func main() {
 	store = core.Store{Dir: dataDir()}
 	cfg = store.Load()
@@ -587,18 +624,17 @@ func main() {
 
 	fyApp = app.NewWithID("it.ic8tem.wavptt")
 	fyApp.SetIcon(fyne.NewStaticResource("Icon.png", iconPNG))
+	applyTheme(themeName(cfg.Theme))
 	mainWin = fyApp.NewWindow(appTitle)
 	mainWin.SetMaster()
 
-	var backend core.Backend
+	// senza sistema audio funziona ancora il TCI (l'audio va alla radio in rete)
 	var hwErr error
 	hwb, hwErr = newHW()
 	if hwErr != nil {
-		backend = noHW{hwErr}
 		hwb = &hw{}
-	} else {
-		backend = hwb
 	}
+	var backend core.Backend = hwb
 
 	mainWin.SetContent(buildMain())
 	eng = core.NewEngine(backend, store, snapshot, setStatus, setPlaying)

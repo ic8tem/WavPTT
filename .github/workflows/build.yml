@@ -23,7 +23,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Test (audio, filtri, compressore, INI, coda PTT)
-        run: go test -count=1 -v ./core/
+        run: |
+          go mod tidy
+          go test -count=1 -v ./core/ ./tci/
 
   windows:
     name: Windows
@@ -68,17 +70,21 @@ jobs:
         run: go mod tidy
       - name: Compila
         run: go build -trimpath -ldflags "-s -w" -o WavPTT .
-      - name: Prova di avvio con schermata
+      - name: Prova di avvio con schermate dei sei schemi
         run: |
           mkdir -p prova && cp WavPTT prova/
-          xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
-            ./prova/WavPTT & PID=$!
-            sleep 10
-            import -window root schermata-linux.png
-            kill $PID || true'
-          test -f schermata-linux.png
-          convert schermata-linux.png -trim +repage schermata-linux.png
-          echo "SCHERMATA-INIZIO"; base64 -w0 schermata-linux.png; echo; echo "SCHERMATA-FINE"
+          for t in Chiaro Notte Nero Blu Viola Verde; do
+            linea=RTS; [ "$t" = "Viola" ] && linea=TCI
+            printf '[Impostazioni]\r\nLinea=%s\r\nColori=%s\r\n' "$linea" "$t" > prova/WavPTT.ini
+            xvfb-run -a -s "-screen 0 1280x800x24" bash -c "
+              ./prova/WavPTT & PID=\$!
+              sleep 8
+              import -window root schermata-$t.png
+              kill \$PID || true"
+            convert schermata-$t.png -trim +repage schermata-$t.png
+            echo "SCHERMATA-$t-INIZIO"; base64 -w0 schermata-$t.png; echo; echo "SCHERMATA-FINE"
+          done
+          cp schermata-Notte.png schermata-linux.png
       - uses: actions/upload-artifact@v4
         with:
           name: schermata-linux

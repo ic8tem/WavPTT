@@ -18,12 +18,18 @@ type Config struct {
 	TxMixer    string
 	Port       string
 	UseDTR     bool
+	UseTCI     bool   // PTT e audio tramite TCI (SunSDR / ExpertSDR) invece di porta seriale e scheda audio
+	TCIAddr    string // host:porta del server TCI
+	Theme      string // schema di colore
 	DelayMs    int
 	Volume     int       // posizione del cursore 0..100 (logaritmico)
 	FilterMode int       // 0 nessuno, 1 = 300-2700 Hz, 2 = 500-2400 Hz, 3 = 500-2100 Hz
 	CompDB     int       // compressore: 0 = off, altrimenti 3..13 dB
 	Memories   [8]string // percorso relativo alla cartella dati (es. WAV/cq.wav) o assoluto
 }
+
+// DefaultTCIAddr: ExpertSDR (SunSDR) ascolta il TCI sulla porta 40001.
+const DefaultTCIAddr = "127.0.0.1:40001"
 
 // FilterNames: voci del menu filtro (indice = FilterMode).
 var FilterNames = []string{"Nessun filtro", "300-2700 Hz", "500-2400 Hz", "500-2100 Hz"}
@@ -66,7 +72,7 @@ func ClampDelay(v int) int {
 
 // Defaults: valori del primo avvio.
 func Defaults() Config {
-	return Config{DelayMs: 100, Volume: 100, FilterMode: 1, CompDB: 3}
+	return Config{DelayMs: 100, Volume: 100, FilterMode: 1, CompDB: 3, TCIAddr: DefaultTCIAddr, Theme: "Notte"}
 }
 
 func (s Store) Load() Config {
@@ -108,6 +114,15 @@ func (s Store) Load() Config {
 				c.Port = v
 			case "linea":
 				c.UseDTR = strings.EqualFold(v, "DTR")
+				c.UseTCI = strings.EqualFold(v, "TCI")
+			case "tci":
+				if v != "" {
+					c.TCIAddr = v
+				}
+			case "colori":
+				if v != "" {
+					c.Theme = v
+				}
 			case "ritardoms":
 				if n, err := strconv.Atoi(v); err == nil {
 					c.DelayMs = ClampDelay(n)
@@ -147,11 +162,16 @@ func (s Store) Save(c Config) error {
 	b.WriteString("[Impostazioni]\r\n")
 	fmt.Fprintf(&b, "TxMixer=%s\r\n", c.TxMixer)
 	fmt.Fprintf(&b, "Porta=%s\r\n", c.Port)
-	if c.UseDTR {
+	switch {
+	case c.UseTCI:
+		b.WriteString("Linea=TCI\r\n")
+	case c.UseDTR:
 		b.WriteString("Linea=DTR\r\n")
-	} else {
+	default:
 		b.WriteString("Linea=RTS\r\n")
 	}
+	fmt.Fprintf(&b, "TCI=%s\r\n", c.TCIAddr)
+	fmt.Fprintf(&b, "Colori=%s\r\n", c.Theme)
 	fmt.Fprintf(&b, "RitardoMs=%d\r\n", ClampDelay(c.DelayMs))
 	fmt.Fprintf(&b, "Volume=%d\r\n", c.Volume)
 	fmt.Fprintf(&b, "Filtro=%d\r\n", c.FilterMode)

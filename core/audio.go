@@ -319,3 +319,6 @@ func compress(chans [][]float64, fs, db float64) {
 		}
 	}
 }
+
+// Resample converte un segnale da inRate a outRate (filtro sinc a finestra).
+func Resample(x []float64, inRate, outRate int) []float64 { return resample(x, inRate, outRate) }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"go.bug.st/serial"
 
 	"wavptt/core"
+	"wavptt/tci"
 )
 
 // hw: porta seriale (PTT) e scheda audio; implementa core.Backend.
@@ -159,8 +161,73 @@ func (h *hw) Play(pcm *core.PCM, device string, stop func() bool) error {
 	return nil
 }
 
-// PTTOn apre la porta seriale con RTS e DTR bassi, poi alza la linea scelta.
-func (h *hw) PTTOn(port string, useDTR bool) (func(), error) {
+// serialTX: PTT su porta seriale, audio sulla scheda TX MIXER.
+type serialTX struct {
+	h       *hw
+	device  string
+	release func()
+}
+
+func (t serialTX) Play(pcm *core.PCM, stop func() bool) error { return t.h.Play(pcm, t.device, stop) }
+func (t serialTX) Release()                                   { t.release() }
+
+// tciTX: PTT e audio tramite TCI.
+type tciTX struct{ c *tci.Conn }
+
+func (t tciTX) Release() { t.c.Close() }
+
+func (t tciTX) Play(pcm *core.PCM, stop func() bool) error {
+	rate, err := t.c.WaitRate(2 * time.Second)
+	if err != nil {
+		return err
+	}
+	// audio a 16 bit interlacciato -> mono float, alla frequenza chiesta dalla radio
+	ch := pcm.Channels
+	n := len(pcm.Data) / (2 * ch)
+	mono := make([]float64, n)
+	for i := 0; i < n; i++ {
+		var sum float64
+		for k := 0; k < ch; k++ {
+			sum += float64(int16(binary.LittleEndian.Uint16(pcm.Data[(i*ch+k)*2:])))
+		}
+		mono[i] = sum / float64(ch) / 32768
+	}
+	if rate != pcm.Rate {
+		mono = core.Resample(mono, pcm.Rate, rate)
+	}
+	out := make([]float32, len(mono))
+	for i, v := range mono {
+		out[i] = float32(v)
+	}
+	return t.c.Play(out, stop)
+}
+
+// PTTOn attiva il PTT secondo le impostazioni (porta seriale o TCI).
+func (h *hw) PTTOn(c core.Config) (core.Transmission, error) {
+	if c.UseTCI {
+		addr := strings.TrimSpace(c.TCIAddr)
+		if addr == "" {
+			addr = core.DefaultTCIAddr
+		}
+		conn, err := tci.Dial(addr, core.OutRate)
+		if err != nil {
+			return nil, err
+		}
+		if err := conn.PTT(true); err != nil {
+			conn.Close()
+			return nil, err
+		}
+		return tciTX{conn}, nil
+	}
+	rel, err := h.serialPTT(c.Port, c.UseDTR)
+	if err != nil {
+		return nil, err
+	}
+	return serialTX{h: h, device: c.TxMixer, release: rel}, nil
+}
+
+// serialPTT apre la porta seriale con RTS e DTR bassi, poi alza la linea scelta.
+func (h *hw) serialPTT(port string, useDTR bool) (func(), error) {
 	if port == "" {
 		return nil, errors.New("nessuna porta COM selezionata")
 	}

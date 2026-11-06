@@ -19,6 +19,8 @@ Le istruzioni per il primo avvio su ogni sistema sono in `LEGGIMI.txt`, dentro o
 
 - 8 memorie, bottoni e tasti **F1…F8**; **Ctrl+Alt+F1…F8** anche da altri programmi (su Mac Ctrl+Option).
 - Sequenza: apre la porta, alza **RTS** o **DTR**, attende il **ritardo** (0–300 ms), riproduce il WAV, rilascia il PTT.
+- In alternativa PTT e audio tramite **TCI** (SunSDR / ExpertSDR e programmi compatibili), indirizzo host:porta.
+- Sei schemi di colore (Chiaro, Notte, Nero, Blu, Viola, Verde) dal menu **Colori**; pulsanti con angoli smussati e bordo in rilievo.
 - Memorie premute durante la trasmissione: in coda, 50 ms tra una e l'altra, PTT sempre attivo.
 - Scheda audio **TX MIXER** impegnata a **8000 Hz**, 16 bit (su Windows tramite driver **MME**).
 - Lavorazione dell'audio: compressore (off, 3…13 dB) → filtro passa banda (300–2700, 500–2400, 500–2100 Hz o nessuno) → volume logaritmico fino a ×1000 → limitazione dei picchi.
