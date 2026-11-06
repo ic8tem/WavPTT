@@ -1,0 +1,5 @@
+*.exe
+/WavPTT
+/WavPTT-*
+/WAV/
+WavPTT.ini

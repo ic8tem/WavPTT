@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=WavPTT
+Comment=Messaggi WAV con PTT su porta seriale
+Exec=WavPTT
+Icon=Icon
+Terminal=false
+Categories=AudioVideo;HamRadio;

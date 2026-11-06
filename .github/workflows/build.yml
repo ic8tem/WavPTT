@@ -1,0 +1,152 @@
+name: Compila WavPTT
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.24.x"
+
+jobs:
+  test:
+    name: Test nucleo comune
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Test (audio, filtri, compressore, INI, coda PTT)
+        run: go test -count=1 -v ./core/
+
+  windows:
+    name: Windows
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Dipendenze
+        run: go mod tidy
+      - name: Compila
+        env:
+          CGO_ENABLED: "1"
+        run: go build -trimpath -ldflags "-H windowsgui -s -w" -o WavPTT.exe .
+      - name: Pacchetto
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force WavPTT | Out-Null
+          Copy-Item WavPTT.exe, packaging/LEGGIMI.txt WavPTT/
+          Compress-Archive -Path WavPTT -DestinationPath WavPTT-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WavPTT-windows
+          path: WavPTT-windows.zip
+
+  linux:
+    name: Linux
+    needs: test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Librerie di sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev libgl1-mesa-dri xorg-dev xvfb imagemagick
+      - name: Dipendenze
+        run: go mod tidy
+      - name: Compila
+        run: go build -trimpath -ldflags "-s -w" -o WavPTT .
+      - name: Prova di avvio con schermata
+        run: |
+          mkdir -p prova && cp WavPTT prova/
+          xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            ./prova/WavPTT & PID=$!
+            sleep 10
+            import -window root schermata-linux.png
+            kill $PID || true'
+          ls -la prova
+          test -f schermata-linux.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: schermata-linux
+          path: schermata-linux.png
+      - name: Pacchetto
+        run: |
+          mkdir -p WavPTT
+          cp WavPTT Icon.png packaging/LEGGIMI.txt packaging/wavptt.desktop WavPTT/
+          tar czf WavPTT-linux-x86_64.tar.gz WavPTT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WavPTT-linux
+          path: WavPTT-linux-x86_64.tar.gz
+
+  macos:
+    name: Mac
+    needs: test
+    runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Dipendenze
+        run: go mod tidy
+      - name: Compila (Apple Silicon e Intel)
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          GOARCH=arm64 CC="clang -arch arm64" go build -trimpath -ldflags "-s -w" -o WavPTT-arm64 .
+          GOARCH=amd64 CC="clang -arch x86_64" go build -trimpath -ldflags "-s -w" -o WavPTT-amd64 .
+          lipo -create -output WavPTT WavPTT-arm64 WavPTT-amd64
+          lipo -info WavPTT
+      - name: Pacchetto WavPTT.app
+        run: |
+          APP=WavPTT/WavPTT.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp WavPTT "$APP/Contents/MacOS/WavPTT"
+          cp packaging/Info.plist "$APP/Contents/Info.plist"
+          mkdir icon.iconset
+          for s in 16 32 128 256 512; do
+            sips -z $s $s Icon.png --out icon.iconset/icon_${s}x${s}.png >/dev/null
+            d=$((s*2)); sips -z $d $d Icon.png --out icon.iconset/icon_${s}x${s}@2x.png >/dev/null
+          done
+          iconutil -c icns icon.iconset -o "$APP/Contents/Resources/icon.icns"
+          codesign --force --deep -s - "$APP"
+          cp packaging/LEGGIMI.txt WavPTT/
+          ditto -c -k --keepParent WavPTT WavPTT-mac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WavPTT-mac
+          path: WavPTT-mac.zip
+
+  release:
+    name: Pubblica la versione
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: WavPTT ${{ github.ref_name }}
+          files: |
+            dist/WavPTT-windows.zip
+            dist/WavPTT-mac.zip
+            dist/WavPTT-linux-x86_64.tar.gz

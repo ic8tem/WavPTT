@@ -1,0 +1,31 @@
+WavPTT v11 - messaggi WAV con PTT su porta seriale
+==================================================
+
+Il programma salva tutto nella propria cartella: WavPTT.ini e la
+sottocartella WAV con le copie dei file assegnati. Tieni quindi WavPTT
+in una cartella dove puoi scrivere (per esempio Documenti\WavPTT).
+La guida completa e' nel bottone Help in basso a destra.
+
+WINDOWS
+- Estrai la cartella WavPTT e avvia WavPTT.exe.
+- Al primo avvio Windows puo' mostrare "PC protetto da Windows":
+  clic su "Ulteriori informazioni" e poi su "Esegui comunque".
+- Audio tramite driver MME.
+
+MAC (Apple Silicon e Intel, macOS 11 o successivo)
+- Estrai la cartella WavPTT (per esempio in Documenti) e apri WavPTT.app.
+- Il programma non e' firmato da Apple: la prima volta fai clic destro
+  su WavPTT.app, scegli Apri e conferma. Se macOS dice che l'app e'
+  danneggiata, apri il Terminale e scrivi:
+      xattr -cr ~/Documents/WavPTT/WavPTT.app
+- Per i tasti Ctrl+Option+F1...F8 da altri programmi concedi a WavPTT
+  l'accesso in Impostazioni di Sistema > Privacy e sicurezza >
+  Accessibilita'. Se F1...F8 comandano luminosita'/volume, usa fn+F1...
+
+LINUX (x86_64)
+- Estrai l'archivio e avvia ./WavPTT (se serve: chmod +x WavPTT).
+- Per usare la porta seriale l'utente deve essere nel gruppo dialout:
+      sudo usermod -aG dialout $USER     (poi esci e rientra)
+- Per la finestra di scelta file del sistema installa "zenity"
+  (altrimenti WavPTT usa la propria).
+- I tasti globali Ctrl+Alt+F1...F8 funzionano nelle sessioni X11.
