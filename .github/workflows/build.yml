@@ -137,19 +137,32 @@ jobs:
           name: WavPTT-mac
           path: WavPTT-mac.zip
 
+  # pubblica nelle Releases: con un tag vNN, oppure con "[pubblica]" nel
+  # messaggio del commit su main (versione letta da packaging/VERSIONE)
   release:
     name: Pubblica la versione
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[pubblica]'))
     needs: [windows, linux, macos]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Versione
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then v="$GITHUB_REF_NAME"; else v=$(tr -d '[:space:]' < packaging/VERSIONE); fi
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          name: WavPTT ${{ github.ref_name }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: WavPTT ${{ steps.ver.outputs.tag }}
+          body: |
+            WavPTT ${{ steps.ver.outputs.tag }} per Windows, Mac (Apple Silicon e Intel) e Linux.
+            Istruzioni per il primo avvio nel file LEGGIMI.txt dentro ogni pacchetto.
           files: |
             dist/WavPTT-windows.zip
             dist/WavPTT-mac.zip
