@@ -3,6 +3,19 @@
 Riproduttore di messaggi WAV per radioamatori, con comando del PTT su porta seriale (RTS o DTR).
 Funziona su **Windows**, **Mac** (Apple Silicon e Intel) e **Linux**.
 
+## Schemi di colore
+
+Si scelgono dal menu **Colori**, accanto al bottone Help.
+
+| Chiaro | Notte |
+|---|---|
+| ![Chiaro](docs/bozzetti/chiaro.png) | ![Notte](docs/bozzetti/notte.png) |
+| **Nero** | **Blu** |
+| ![Nero](docs/bozzetti/nero.png) | ![Blu](docs/bozzetti/blu.png) |
+| **Viola** | **Verde** |
+| ![Viola](docs/bozzetti/viola.png) | ![Verde](docs/bozzetti/verde.png) |
+
+
 ## Scaricare
 
 Le versioni pronte sono nella pagina **Releases** del repository:
